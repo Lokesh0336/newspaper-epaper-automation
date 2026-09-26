@@ -11,6 +11,10 @@
 
 </div>
 
+<p align="center">
+  <img src="https://i.ibb.co/Z1kdxmw8/Chat-GPT-Image-Sep-26-2026-11-01-33-PM.png" alt="Newspaper E-Paper Automation" width="900">
+</p>
+
 ---
 
 ## Overview
@@ -20,68 +24,3 @@
 The project uses browser automation to navigate e-paper pages, capture individual pages, and convert the captured pages into PDF files.
 
 Each newspaper is maintained as an independent integration, making the project easier to maintain and extend as additional newspapers are added.
-
----
-
-## Currently Supported
-
-The project currently supports:
-
-- **Eenadu**
-- **Sakshi**
-
-Additional newspapers and editions will be added in future releases.
-
-### Planned Integrations
-
-Potential future integrations include:
-
-- Andhra Jyothi
-- Namasthe Telangana
-- Additional regional newspapers
-- Additional newspaper editions
-
-The availability of each integration depends on the structure and accessibility of the respective e-paper website.
-
----
-
-## Features
-
-- Automated e-paper page navigation
-- Date-based newspaper access
-- High-resolution page screenshots
-- Automatic page capture
-- Newspaper-specific automation
-- PDF generation from captured pages
-- Modular project structure
-- Command-line execution
-- Local browser profile support
-- Support for adding additional newspapers
-- Open-source under the MIT License
-
----
-
-## Technology Stack
-
-The project is built using:
-
-- **Python**
-- **Selenium**
-- **Undetected ChromeDriver**
-- **Pillow**
-- **Google Chrome**
-
----
-
-## Requirements
-
-Before using the project, install the following:
-
-- Python 3.10 or later
-- Google Chrome
-- Internet connection
-
-Check your Python installation:
-
-```bash
-python --version
