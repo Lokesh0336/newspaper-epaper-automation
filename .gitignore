@@ -1,0 +1,78 @@
+# ==============================
+# Python
+# ==============================
+
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+ENV/
+
+# ==============================
+# Chrome Profiles
+# ==============================
+
+chrome_profile/
+sakshi_chrome_profile/
+
+# Any Chrome profile folders
+**/chrome_profile/
+**/user-data/
+**/User Data/
+
+# ==============================
+# Screenshots / Images
+# ==============================
+
+pages_shot/
+sakshi_pages_shot/
+
+*.png
+*.jpg
+*.jpeg
+*.webp
+
+# ==============================
+# Generated PDFs
+# ==============================
+
+*.pdf
+
+# ==============================
+# Temporary / Debug Files
+# ==============================
+
+*.tmp
+*.temp
+*.log
+*.bak
+*.swp
+
+# ==============================
+# Local Configuration
+# ==============================
+
+.env
+.env.*
+!.env.example
+
+# ==============================
+# Selenium / Browser Files
+# ==============================
+
+selenium-profile/
+downloads/
+
+# ==============================
+# OS Files
+# ==============================
+
+Thumbs.db
+Desktop.ini
+.DS_Store
