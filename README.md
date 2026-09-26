@@ -1,7 +1,7 @@
 # Newspaper E-Paper Automation
 
 <p align="center">
-  <img src="assets/hero.png" alt="Newspaper E-Paper Automation" width="900">
+  <img src="assets/Hero.png" alt="Newspaper E-Paper Automation" width="900">
 </p>
 
 <p align="center">
@@ -11,8 +11,10 @@
 <p align="center">
   <a href="#features">Features</a> •
   <a href="#supported-newspapers">Supported Newspapers</a> •
+  <a href="#technology-stack">Technology Stack</a> •
   <a href="#installation">Installation</a> •
   <a href="#usage">Usage</a> •
+  <a href="#project-structure">Project Structure</a> •
   <a href="#contributing">Contributing</a> •
   <a href="#roadmap">Roadmap</a>
 </p>
@@ -33,34 +35,45 @@
 
 **Newspaper E-Paper Automation** is an open-source Python project designed to automate the process of accessing newspaper e-paper pages, capturing individual pages, and generating high-quality PDF documents.
 
-The project is built with a modular architecture where each newspaper has its own independent automation implementation.
+The project provides separate automation implementations for different newspapers.
 
-This approach makes it easier to maintain existing integrations and add support for new newspapers without unnecessarily affecting other integrations.
+Each newspaper integration is maintained independently because different e-paper platforms may use different:
+
+- Page layouts
+- Navigation systems
+- HTML structures
+- Image loading mechanisms
+- Browser behavior
+- Authentication systems
+- Page detection methods
+
+This modular approach makes it easier to maintain existing integrations and add support for new newspapers without unnecessarily affecting other integrations.
 
 ---
 
-## Supported Newspapers
+# Supported Newspapers
 
-### Currently Available
+## Currently Available
 
-| Newspaper | Integration |
-|-----------|-------------|
+| Newspaper | Status |
+|-----------|--------|
 | **Eenadu** | ✅ Available |
 | **Sakshi** | ✅ Available |
 
-### Coming Soon
+## Coming Soon
 
-Additional newspaper integrations will be added in future releases.
+More newspaper integrations will be added in future releases.
 
-Planned and potential integrations include:
+Potential and planned integrations include:
 
-- Andhra Jyothi
-- Namasthe Telangana
+- **Andhra Jyothi**
+- **Namasthe Telangana**
 - Additional regional newspapers
 - Additional newspaper editions
 - More language support
+- Improved cross-platform support
 
-> **Note:** Newspaper integrations are developed and tested individually because different e-paper platforms can use different page structures, navigation systems, and access mechanisms.
+> **Note:** Each newspaper is implemented separately because e-paper websites can differ significantly in their page structure, navigation, authentication, and image delivery systems.
 
 ---
 
@@ -69,20 +82,22 @@ Planned and potential integrations include:
 - 📅 Date-based e-paper access
 - 🌐 Browser-based automation
 - 🔄 Automated page navigation
-- 📸 High-resolution page capture
+- 📸 High-resolution page screenshots
 - 📄 High-quality PDF generation
 - 🧩 Independent newspaper integrations
-- 🛠️ Modular architecture
+- 🛠️ Modular project architecture
 - 💻 Command-line execution
-- 🌍 Designed for future newspaper and language support
+- 🌍 Designed for multiple newspapers
+- 🌐 Future multi-language support
 - 🔓 Open-source MIT License
-- 🤝 Open to developer contributions
+- 🤝 Developer-friendly architecture
+- 👨‍💻 Open to developer contributions
 
 ---
 
 # Technology Stack
 
-The project currently uses:
+The project currently uses the following technologies:
 
 | Technology | Purpose |
 |------------|---------|
@@ -96,13 +111,13 @@ The project currently uses:
 
 # Requirements
 
-Before using the project, install:
+Before using the project, make sure you have:
 
-- Python 3.10 or later
+- Python **3.10 or later**
 - Google Chrome
 - Internet connection
 
-Verify Python:
+Check your Python version:
 
 ```bash
 python --version
