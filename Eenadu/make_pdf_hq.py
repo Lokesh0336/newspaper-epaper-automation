@@ -1,87 +1,259 @@
-r"""
-High-quality, reasonable-size PDF.
-No downsampling. JPEG quality 90, no chroma subsampling.
-Result: ~1 MB per page for typical newspaper scans.
+"""
+Eenadu High Quality PDF Builder
 
-Project: Eenadu E-Paper PDF Pipeline
-Usage  : python make_pdf_hq.py <image_folder> <output_pdf>
+Usage:
 
-Example:
-    python make_pdf_hq.py pages_shot "Eenadu 17-09-2026 Telangana.pdf"
+Normal:
+    python make_pdf_hq.py pages_shot "Eenadu 27-09-2026 Telangana.pdf"
+
+District edition:
+    python make_pdf_hq.py Edition_shots\\27-09-2026\\JAGTIAL "Eenadu 27-09-2026 Jagtial.pdf"
 """
 
 import os
 import sys
+
 from PIL import Image
 
-# --- Config ---
-A4_W_IN = 8.27
-A4_H_IN = 11.69
-DPI     = 200
+
+# ============================================================
+# PDF SETTINGS
+# ============================================================
+
+DPI = 200
+
 QUALITY = 90
 
 
-def make_pdf(folder, output):
-    valid = ('.png', '.jpg', '.jpeg')
-    files = sorted([
-        os.path.join(folder, f) for f in os.listdir(folder)
-        if f.lower().endswith(valid)
-    ])
+# ============================================================
+# BUILD PDF
+# ============================================================
 
-    if not files:
-        print(f"No images in {folder}")
+def make_pdf(
+    folder,
+    output
+):
+
+    if not os.path.isdir(
+        folder
+    ):
+
+        print(
+            f"[ERROR] Folder does not exist:"
+        )
+
+        print(
+            folder
+        )
+
         return
 
-    A4_W = int(A4_W_IN * DPI)
-    A4_H = int(A4_H_IN * DPI)
 
-    print("Eenadu PDF Builder")
-    print(f"Building PDF — quality {QUALITY}, no downsampling")
-    print(f"Pages: {len(files)}\n")
+    valid_extensions = (
+        ".png",
+        ".jpg",
+        ".jpeg",
+    )
+
+
+    files = sorted(
+        [
+            os.path.join(
+                folder,
+                filename
+            )
+            for filename in os.listdir(
+                folder
+            )
+            if filename.lower().endswith(
+                valid_extensions
+            )
+        ]
+    )
+
+
+    if not files:
+
+        print(
+            f"[ERROR] No images found in:"
+        )
+
+        print(
+            folder
+        )
+
+        return
+
+
+    print()
+    print("=" * 65)
+    print("EENADU PDF BUILDER")
+    print("=" * 65)
+
+    print(
+        f"Folder : {folder}"
+    )
+
+    print(
+        f"Pages  : {len(files)}"
+    )
+
+    print(
+        f"DPI    : {DPI}"
+    )
+
+    print(
+        f"Quality: {QUALITY}"
+    )
+
+    print("=" * 65)
+
 
     pages = []
 
-    for i, f in enumerate(files, 1):
-        img = Image.open(f).convert("RGB")
 
-        # A4 canvas is large enough to fit the image at native pixels
-        canvas_w = max(A4_W, img.width)
-        canvas_h = max(A4_H, img.height)
+    for index, filepath in enumerate(
+        files,
+        start=1
+    ):
 
-        canvas = Image.new("RGB", (canvas_w, canvas_h), "white")
+        print(
+            f"[{index:03d}/{len(files):03d}] "
+            f"{os.path.basename(filepath)}"
+        )
 
-        x = (canvas_w - img.width) // 2
-        y = (canvas_h - img.height) // 2
 
-        canvas.paste(img, (x, y))
-        pages.append(canvas)
+        try:
 
-        print(f"  [{i:02d}/{len(files)}] {os.path.basename(f)}: {img.size}")
+            image = Image.open(
+                filepath
+            ).convert(
+                "RGB"
+            )
 
+
+            pages.append(
+                image
+            )
+
+
+        except Exception as error:
+
+            print(
+                f"    [ERROR] {error}"
+            )
+
+
+    if not pages:
+
+        print(
+            "\n[ERROR] No valid images."
+        )
+
+        return
+
+
+    # --------------------------------------------------------
+    # Ensure output directory exists.
+    # --------------------------------------------------------
+
+    output_directory = os.path.dirname(
+        os.path.abspath(
+            output
+        )
+    )
+
+
+    os.makedirs(
+        output_directory,
+        exist_ok=True
+    )
+
+
+    # --------------------------------------------------------
     # Save PDF
-    pages[0].save(
+    # --------------------------------------------------------
+
+    first = pages[0]
+
+    remaining = pages[1:]
+
+
+    first.save(
         output,
+        "PDF",
+        resolution=float(DPI),
         save_all=True,
-        append_images=pages[1:],
-        dpi=(DPI, DPI),
+        append_images=remaining,
         quality=QUALITY,
         subsampling=0,
         optimize=True,
         progressive=True,
-        title=os.path.basename(output),
+        title=os.path.basename(
+            output
+        ),
         creator="Eenadu",
+        subject="Eenadu E-Paper",
     )
 
-    mb = os.path.getsize(output) / (1024 * 1024)
 
-    print(f"\nPDF: {output}")
-    print("Creator: Eenadu")
-    print(f"Size: {mb:.1f} MB  ({mb * 1024 / len(files):.0f} KB/page)")
+    size_mb = (
+        os.path.getsize(
+            output
+        )
+        / (1024 * 1024)
+    )
 
 
-if __name__ == "__main__":
+    print()
+    print("=" * 65)
+    print("PDF CREATED")
+    print("=" * 65)
+
+    print(
+        f"PDF   : {output}"
+    )
+
+    print(
+        f"Pages : {len(pages)}"
+    )
+
+    print(
+        f"Size  : {size_mb:.1f} MB"
+    )
+
+    print("=" * 65)
+
+
+# ============================================================
+# MAIN
+# ============================================================
+
+def main():
+
     if len(sys.argv) < 3:
-        print(__doc__)
+
+        print(
+            __doc__
+        )
+
         sys.exit(1)
 
-    make_pdf(sys.argv[1], sys.argv[2])
+
+    folder = sys.argv[1]
+
+    output = sys.argv[2]
+
+
+    make_pdf(
+        folder,
+        output
+    )
+
+
+# ============================================================
+# ENTRY POINT
+# ============================================================
+
+if __name__ == "__main__":
+    main()

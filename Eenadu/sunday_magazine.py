@@ -1,41 +1,22 @@
 # ============================================================
-# Newspaper E-Paper Automation
-# Open Source Project
-# Copyright (c) 2026
-#
-# Licensed under the MIT License.
-# See LICENSE file for details.
+# Eenadu E-Paper - Sunday Magazine Downloader
 # ============================================================
 #
-# Eenadu Main Edition
-#
-# Editions:
-#   1) Andhra Pradesh
-#   2) Greater Hyderabad
-#   3) Telangana
-#
 # Features:
-#   - Automatic edition selection
-#   - Automatic page detection
-#   - Automatic page navigation
-#   - Exact newspaper screenshot capture
-#   - Automatic A4 PDF creation
-#   - Automatically deletes PNG screenshots after
+#   - Open first Sunday Magazine page only
+#   - Automatically navigate through all pages
+#   - No manual PID list
+#   - No manual page count
+#   - Capture only the actual newspaper/magazine page
+#   - Automatically create A4 PDF
+#   - Automatically delete PNG screenshots after
 #     successful PDF creation
+#   - If PDF creation fails, screenshots are preserved
 #
 # Usage:
 #
-#   python screenshot_loop.py DD/MM/YYYY
+#   python sunday_magazine.py 27/09/2026
 #
-# Example:
-#
-#   python screenshot_loop.py 27/09/2026
-#
-# ============================================================
-
-
-# ============================================================
-# IMPORTS
 # ============================================================
 
 import os
@@ -61,8 +42,17 @@ BASE_DIR = r"C:\newspaper\Eenadu"
 
 OUTPUT_BASE_DIR = os.path.join(
     BASE_DIR,
-    "pages_shot"
+    "Edition_shots"
 )
+
+PROFILE_DIR = r"C:\newspaper\chrome_profile"
+
+# Sunday Magazine EID
+EID = 367
+
+# ONLY THE FIRST PID IS REQUIRED.
+# The script discovers the remaining pages automatically.
+FIRST_PID = 3597735
 
 SCALE = 2
 
@@ -72,65 +62,27 @@ WAIT_AFTER_TURN = 3
 
 WAIT_FOR_TURN_TIMEOUT = 15
 
-CROP_TOP_PX = 0
-
-PROFILE_DIR = r"C:\newspaper\chrome_profile"
-
-# Maximum safety limit.
-#
-# The script does NOT ask for page count.
-# It keeps navigating until no next page is detected.
-#
 MAX_PAGES = 100
 
-
-# ============================================================
-# MAIN EDITIONS
-# ============================================================
-
-EDITIONS = {
-
-    "1": {
-        "name": "Andhra Pradesh",
-        "eid": 2,
-        "pid": 3598678
-    },
-
-    "2": {
-        "name": "Greater Hyderabad",
-        "eid": 3,
-        "pid": 3598763
-    },
-
-    "3": {
-        "name": "Telangana",
-        "eid": 1,
-        "pid": 3598765
-    }
-
-}
+CROP_TOP_PX = 0
 
 
 # ============================================================
 # BUILD URL
 # ============================================================
 
-def build_url(
-    date_string,
-    eid,
-    pid
-):
+def build_url(date_string, pid):
 
     return (
         "https://epaper.eenadu.net/Home/Index"
         f"?date={date_string}"
-        f"&eid={eid}"
+        f"&eid={EID}"
         f"&pid={pid}"
     )
 
 
 # ============================================================
-# BUILD CHROME DRIVER
+# BUILD DRIVER
 # ============================================================
 
 def build_driver():
@@ -145,9 +97,7 @@ def build_driver():
         "--force-device-scale-factor=1"
     )
 
-    if os.path.isdir(
-        PROFILE_DIR
-    ):
+    if os.path.isdir(PROFILE_DIR):
 
         options.add_argument(
             f"--user-data-dir={PROFILE_DIR}"
@@ -161,13 +111,6 @@ def build_driver():
             f"[i] Using profile: {PROFILE_DIR}"
         )
 
-    else:
-
-        print(
-            f"[i] No profile at {PROFILE_DIR} "
-            "— using a fresh profile."
-        )
-
     return uc.Chrome(
         options=options,
         headless=False,
@@ -176,58 +119,31 @@ def build_driver():
 
 
 # ============================================================
-# FIND NEWSPAPER PAGE ELEMENT
+# FIND MAGAZINE IMAGE
 # ============================================================
 
 def find_page_element(driver):
 
-    # --------------------------------------------------------
-    # Check for block / slow connection page.
-    # --------------------------------------------------------
+    # IMPORTANT:
+    #
+    # For Sunday Magazine, prioritize imgmain1.
+    #
+    # This prevents capturing the surrounding viewer/list
+    # instead of the actual magazine page.
 
-    try:
+    selectors = [
+        ("id", "imgmain1"),
+        ("id", "ImageContainer"),
+        ("id", "homeMainImgBox"),
+    ]
 
-        body_text = driver.find_element(
-            By.TAG_NAME,
-            "body"
-        ).text.lower()
-
-        if (
-            "connection is slow" in body_text
-            or "please wait" in body_text
-        ):
-
-            print()
-
-            print(
-                "[!] Eenadu is showing the "
-                "'slow connection' bot-block screen."
-            )
-
-            print()
-
-            return None, "blocked"
-
-    except Exception:
-
-        pass
-
-
-    # --------------------------------------------------------
-    # Keep the same working selector order.
-    # --------------------------------------------------------
-
-    for elem_id in [
-        "ImageContainer",
-        "imgmain1",
-        "homeMainImgBox"
-    ]:
+    for selector_type, selector_value in selectors:
 
         try:
 
             element = driver.find_element(
                 By.ID,
-                elem_id
+                selector_value
             )
 
             width = element.size["width"]
@@ -238,12 +154,11 @@ def find_page_element(driver):
                 and height > 400
             ):
 
-                return element, elem_id
+                return element, selector_value
 
         except Exception:
 
             pass
-
 
     return None, None
 
@@ -269,7 +184,7 @@ def get_image_src(driver):
 
 
 # ============================================================
-# GET PID FROM CURRENT URL
+# GET CURRENT PID
 # ============================================================
 
 def get_current_pid(driver):
@@ -295,7 +210,7 @@ def get_current_pid(driver):
 
 
 # ============================================================
-# GET PAGE NUMBER FROM IMAGE SRC
+# GET PAGE NUMBER FROM IMAGE
 # ============================================================
 
 def page_number_from_src(src):
@@ -304,22 +219,41 @@ def page_number_from_src(src):
 
         return None
 
-    match = re.search(
+    patterns = [
+
         r'_(\d{2})_hr\.(?:jpg|png)',
-        src
-    )
 
-    if match:
+        r'_(\d+)_hr\.(?:jpg|png)',
 
-        return int(
-            match.group(1)
+        r'_(\d+)\.(?:jpg|png)',
+
+    ]
+
+    for pattern in patterns:
+
+        match = re.search(
+            pattern,
+            src,
+            re.IGNORECASE
         )
+
+        if match:
+
+            try:
+
+                return int(
+                    match.group(1)
+                )
+
+            except Exception:
+
+                pass
 
     return None
 
 
 # ============================================================
-# GET CURRENT PAGE SIGNATURE
+# GET PAGE SIGNATURE
 # ============================================================
 
 def get_page_signature(driver):
@@ -344,12 +278,12 @@ def get_page_signature(driver):
 
 
 # ============================================================
-# WAIT FOR PAGE READY
+# WAIT FOR IMAGE READY
 # ============================================================
 
 def wait_for_page_ready(
     driver,
-    timeout=15
+    timeout=20
 ):
 
     end_time = (
@@ -473,7 +407,7 @@ def wait_for_page_change(
 
 
 # ============================================================
-# HIDE STICKY OVERLAYS
+# HIDE STICKY ELEMENTS
 # ============================================================
 
 def hide_sticky_overlays(driver):
@@ -497,19 +431,16 @@ def hide_sticky_overlays(driver):
                         s.position === 'sticky'
                     ) {
 
-                        window.__hidden_stack.push(
-                            [
-                                el,
-                                el.style.visibility
-                            ]
-                        );
+                        window.__hidden_stack.push([
+                            el,
+                            el.style.visibility
+                        ]);
 
                         el.style.visibility =
                             'hidden';
                     }
 
-                }
-                catch(e) {}
+                } catch(e) {}
 
             });
             """
@@ -525,7 +456,7 @@ def hide_sticky_overlays(driver):
 
 
 # ============================================================
-# RESTORE STICKY OVERLAYS
+# RESTORE STICKY ELEMENTS
 # ============================================================
 
 def restore_overlays(driver):
@@ -535,15 +466,14 @@ def restore_overlays(driver):
         driver.execute_script(
             """
             (window.__hidden_stack || [])
-                .forEach(([el, vis]) => {
+                .forEach(([el, visibility]) => {
 
                     try {
 
                         el.style.visibility =
-                            vis;
+                            visibility;
 
-                    }
-                    catch(e) {}
+                    } catch(e) {}
 
                 });
 
@@ -557,19 +487,19 @@ def restore_overlays(driver):
 
 
 # ============================================================
-# CAPTURE NEWSPAPER PAGE
+# CAPTURE EXACT MAGAZINE PAGE
 # ============================================================
 
 def capture(
     driver,
     element,
-    path,
+    output_path,
     scale=SCALE,
     crop_top=CROP_TOP_PX
 ):
 
     # --------------------------------------------------------
-    # Scroll exact newspaper element to top.
+    # Scroll the actual magazine image to the top.
     # --------------------------------------------------------
 
     driver.execute_script(
@@ -588,7 +518,7 @@ def capture(
 
 
     # --------------------------------------------------------
-    # Hide fixed/sticky elements.
+    # Hide viewer overlays.
     # --------------------------------------------------------
 
     hide_sticky_overlays(
@@ -598,7 +528,7 @@ def capture(
     try:
 
         # ----------------------------------------------------
-        # Get exact element coordinates.
+        # Get exact magazine image rectangle.
         # ----------------------------------------------------
 
         rect = driver.execute_script(
@@ -607,14 +537,11 @@ def capture(
                 arguments[0].getBoundingClientRect();
 
             return {
-
                 x:
-                    r.left
-                    + window.scrollX,
+                    r.left + window.scrollX,
 
                 y:
-                    r.top
-                    + window.scrollY,
+                    r.top + window.scrollY,
 
                 w:
                     r.width,
@@ -628,7 +555,7 @@ def capture(
 
 
         # ----------------------------------------------------
-        # Capture ONLY newspaper element.
+        # Capture ONLY that element.
         # ----------------------------------------------------
 
         result = driver.execute_cdp_cmd(
@@ -639,21 +566,11 @@ def capture(
                 "captureBeyondViewport": True,
 
                 "clip": {
-
-                    "x":
-                        rect["x"],
-
-                    "y":
-                        rect["y"],
-
-                    "width":
-                        rect["w"],
-
-                    "height":
-                        rect["h"],
-
-                    "scale":
-                        scale
+                    "x": rect["x"],
+                    "y": rect["y"],
+                    "width": rect["w"],
+                    "height": rect["h"],
+                    "scale": scale
                 }
             }
         )
@@ -682,9 +599,7 @@ def capture(
             )
         )
 
-        width, height = (
-            image.size
-        )
+        width, height = image.size
 
         image = image.crop(
             (
@@ -696,23 +611,23 @@ def capture(
         )
 
         image.save(
-            path
+            output_path
         )
 
     else:
 
         with open(
-            path,
+            output_path,
             "wb"
-        ) as file:
+        ) as f:
 
-            file.write(
+            f.write(
                 png_bytes
             )
 
 
 # ============================================================
-# SEND ARROWRIGHT
+# ARROW RIGHT
 # ============================================================
 
 def try_arrow_right(driver):
@@ -736,7 +651,7 @@ def try_arrow_right(driver):
 
 
 # ============================================================
-# FIND NEXT BUTTON
+# NEXT BUTTON
 # ============================================================
 
 def try_next_button(driver):
@@ -772,9 +687,7 @@ def try_next_button(driver):
                     continue
 
                 driver.execute_script(
-                    """
-                    arguments[0].click();
-                    """,
+                    "arguments[0].click();",
                     element
                 )
 
@@ -801,7 +714,7 @@ def turn_to_next_page(
 ):
 
     # --------------------------------------------------------
-    # Try ArrowRight.
+    # ArrowRight
     # --------------------------------------------------------
 
     print(
@@ -818,8 +731,7 @@ def turn_to_next_page(
 
         if wait_for_page_change(
             driver,
-            old_signature,
-            timeout=WAIT_FOR_TURN_TIMEOUT
+            old_signature
         ):
 
             return "arrow-key"
@@ -831,7 +743,7 @@ def turn_to_next_page(
 
 
     # --------------------------------------------------------
-    # Try next button.
+    # Next button
     # --------------------------------------------------------
 
     print(
@@ -848,15 +760,14 @@ def turn_to_next_page(
 
         if wait_for_page_change(
             driver,
-            old_signature,
-            timeout=WAIT_FOR_TURN_TIMEOUT
+            old_signature
         ):
 
             return "next-button"
 
 
     # --------------------------------------------------------
-    # No page change.
+    # No next page.
     # --------------------------------------------------------
 
     print(
@@ -871,99 +782,28 @@ def turn_to_next_page(
 
 
 # ============================================================
-# SELECT EDITION
-# ============================================================
-
-def select_edition():
-
-    print()
-
-    print(
-        "=" * 70
-    )
-
-    print(
-        "SELECT EENADU EDITION"
-    )
-
-    print(
-        "=" * 70
-    )
-
-    print()
-
-    print(
-        "1) Andhra Pradesh"
-    )
-
-    print(
-        "2) Greater Hyderabad"
-    )
-
-    print(
-        "3) Telangana"
-    )
-
-    print()
-
-    print(
-        "=" * 70
-    )
-
-
-    while True:
-
-        choice = input(
-            "Enter edition number (1-3): "
-        ).strip()
-
-
-        if choice in EDITIONS:
-
-            return EDITIONS[
-                choice
-            ]
-
-
-        print()
-
-        print(
-            "[!] Invalid selection."
-        )
-
-        print(
-            "Please enter 1, 2, or 3."
-        )
-
-        print()
-
-
-# ============================================================
 # CREATE A4 PDF
 # ============================================================
 
 def create_a4_pdf(
     output_dir,
-    edition_name,
     date_str,
     captured_pages
 ):
 
     """
-    Create an A4 PDF from captured PNG screenshots.
+    Creates an A4 300-DPI PDF.
 
-    IMPORTANT:
-
-    PNG screenshots are deleted ONLY after the PDF has
-    been successfully written and verified.
-
-    If PDF creation fails, PNG files remain untouched.
+    PNG files are deleted ONLY after:
+        1. PDF creation succeeds
+        2. PDF exists
+        3. PDF size > 0
     """
 
     if captured_pages <= 0:
 
         print(
-            "[!] No pages available for PDF."
+            "[!] No captured pages."
         )
 
         return None
@@ -990,7 +830,7 @@ def create_a4_pdf(
 
 
     # --------------------------------------------------------
-    # Collect captured PNGs.
+    # Find PNG screenshots.
     # --------------------------------------------------------
 
     image_files = []
@@ -1000,13 +840,9 @@ def create_a4_pdf(
         captured_pages + 1
     ):
 
-        filename = (
-            f"page_{page_number:03d}.png"
-        )
-
         path = os.path.join(
             output_dir,
-            filename
+            f"page_{page_number:03d}.png"
         )
 
         if os.path.isfile(
@@ -1017,18 +853,11 @@ def create_a4_pdf(
                 path
             )
 
-        else:
-
-            print(
-                f"[!] Missing screenshot: "
-                f"{filename}"
-            )
-
 
     if not image_files:
 
         print(
-            "[!] No PNG pages found."
+            "[!] No screenshots found."
         )
 
         return None
@@ -1047,12 +876,7 @@ def create_a4_pdf(
 
     pdf_path = os.path.join(
         output_dir,
-
-        (
-            f"Eenadu "
-            f"{safe_date} "
-            f"{edition_name} A4.pdf"
-        )
+        f"Eenadu {safe_date} Sunday Magazine A4.pdf"
     )
 
 
@@ -1071,15 +895,11 @@ def create_a4_pdf(
     )
 
     print(
-        f"Edition : {edition_name}"
+        f"Pages : {len(image_files)}"
     )
 
     print(
-        f"Pages   : {len(image_files)}"
-    )
-
-    print(
-        f"PDF     : {pdf_path}"
+        f"PDF   : {pdf_path}"
     )
 
     print()
@@ -1089,7 +909,7 @@ def create_a4_pdf(
 
 
     # --------------------------------------------------------
-    # Convert PNGs to A4 pages.
+    # Convert each screenshot to an A4 page.
     # --------------------------------------------------------
 
     for index, image_path in enumerate(
@@ -1105,14 +925,13 @@ def create_a4_pdf(
                 "RGB"
             )
 
-
             original_width, original_height = (
                 image.size
             )
 
 
             # ------------------------------------------------
-            # Preserve original aspect ratio.
+            # Preserve aspect ratio.
             # ------------------------------------------------
 
             scale_x = (
@@ -1148,10 +967,6 @@ def create_a4_pdf(
             )
 
 
-            # ------------------------------------------------
-            # Resize.
-            # ------------------------------------------------
-
             resized = image.resize(
                 (
                     new_width,
@@ -1162,23 +977,21 @@ def create_a4_pdf(
 
 
             # ------------------------------------------------
-            # Create white A4 canvas.
+            # White A4 canvas.
             # ------------------------------------------------
 
             page = Image.new(
                 "RGB",
-
                 (
                     A4_WIDTH,
                     A4_HEIGHT
                 ),
-
                 "white"
             )
 
 
             # ------------------------------------------------
-            # Center newspaper page.
+            # Center page.
             # ------------------------------------------------
 
             x = (
@@ -1216,8 +1029,8 @@ def create_a4_pdf(
         except Exception as e:
 
             print(
-                f"[!] Failed to process:"
-                f" {image_path}"
+                f"[!] Failed to process "
+                f"{image_path}"
             )
 
             print(
@@ -1226,46 +1039,39 @@ def create_a4_pdf(
 
 
     # --------------------------------------------------------
-    # Make sure we actually have PDF pages.
+    # Nothing to save.
     # --------------------------------------------------------
 
     if not pdf_pages:
 
         print(
-            "[!] No PDF pages generated."
+            "[!] PDF pages could not be generated."
+        )
+
+        print(
+            "[!] Screenshots will NOT be deleted."
         )
 
         return None
 
 
     # --------------------------------------------------------
-    # Save PDF.
+    # SAVE PDF
     # --------------------------------------------------------
 
     try:
 
-        first_page = pdf_pages[0]
-
-        remaining_pages = pdf_pages[1:]
-
-
-        first_page.save(
+        pdf_pages[0].save(
             pdf_path,
-
             "PDF",
-
             resolution=300.0,
-
             save_all=True,
-
-            append_images=remaining_pages,
-
+            append_images=pdf_pages[1:],
             title=(
                 f"Eenadu "
                 f"{safe_date} "
-                f"{edition_name}"
+                f"Sunday Magazine"
             ),
-
             creator="Eenadu"
         )
 
@@ -1284,18 +1090,15 @@ def create_a4_pdf(
         print()
 
         print(
-            "[IMPORTANT] PNG screenshots "
-            "were NOT deleted."
+            "[IMPORTANT] Screenshots were NOT deleted."
         )
 
         return None
 
 
-    # --------------------------------------------------------
-    # VERIFY PDF EXISTS.
-    #
-    # We delete PNGs ONLY after this succeeds.
-    # --------------------------------------------------------
+    # ========================================================
+    # VERIFY PDF
+    # ========================================================
 
     if not os.path.isfile(
         pdf_path
@@ -1304,13 +1107,12 @@ def create_a4_pdf(
         print()
 
         print(
-            "[ERROR] PDF file was not found "
+            "[ERROR] PDF file does not exist "
             "after creation."
         )
 
         print(
-            "[IMPORTANT] PNG screenshots "
-            "were NOT deleted."
+            "[IMPORTANT] Screenshots were NOT deleted."
         )
 
         return None
@@ -1330,16 +1132,15 @@ def create_a4_pdf(
         )
 
         print(
-            "[IMPORTANT] PNG screenshots "
-            "were NOT deleted."
+            "[IMPORTANT] Screenshots were NOT deleted."
         )
 
         return None
 
 
-    # --------------------------------------------------------
-    # PDF SUCCESS.
-    # --------------------------------------------------------
+    # ========================================================
+    # PDF SUCCESS
+    # ========================================================
 
     print()
 
@@ -1352,13 +1153,13 @@ def create_a4_pdf(
     )
 
     print(
-        f"[OK] PDF size: "
+        f"[OK] Size: "
         f"{pdf_size / (1024 * 1024):.2f} MB"
     )
 
 
     # ========================================================
-    # DELETE PNG SCREENSHOTS
+    # DELETE SCREENSHOTS
     # ========================================================
 
     print()
@@ -1368,7 +1169,7 @@ def create_a4_pdf(
     )
 
     print(
-        "DELETING SCREENSHOT FILES"
+        "DELETING SCREENSHOTS"
     )
 
     print(
@@ -1414,34 +1215,31 @@ def create_a4_pdf(
             )
 
 
-    # --------------------------------------------------------
-    # Deletion summary.
-    # --------------------------------------------------------
+    # ========================================================
+    # CLEANUP SUMMARY
+    # ========================================================
 
     print()
 
     print(
-        f"[OK] Deleted screenshots: "
+        f"[OK] Screenshots deleted: "
         f"{deleted_count}"
     )
 
-    if failed_count > 0:
+    if failed_count == 0:
 
         print(
-            f"[WARNING] Failed to delete: "
-            f"{failed_count}"
+            "[OK] All screenshots deleted successfully."
         )
 
     else:
 
         print(
-            "[OK] All screenshots deleted."
+            f"[WARNING] "
+            f"{failed_count} screenshot(s) "
+            "could not be deleted."
         )
 
-
-    # --------------------------------------------------------
-    # Return PDF path.
-    # --------------------------------------------------------
 
     return pdf_path
 
@@ -1453,7 +1251,7 @@ def create_a4_pdf(
 def main():
 
     # --------------------------------------------------------
-    # DATE REQUIRED
+    # DATE
     # --------------------------------------------------------
 
     if len(sys.argv) < 2:
@@ -1463,7 +1261,7 @@ def main():
         )
 
         print(
-            "python screenshot_loop.py DD/MM/YYYY"
+            "python sunday_magazine.py DD/MM/YYYY"
         )
 
         print()
@@ -1473,7 +1271,7 @@ def main():
         )
 
         print(
-            "python screenshot_loop.py 27/09/2026"
+            "python sunday_magazine.py 27/09/2026"
         )
 
         sys.exit(1)
@@ -1483,7 +1281,7 @@ def main():
 
 
     # --------------------------------------------------------
-    # DATE VALIDATION
+    # Validate date.
     # --------------------------------------------------------
 
     if not re.fullmatch(
@@ -1499,40 +1297,20 @@ def main():
 
 
     # --------------------------------------------------------
-    # SELECT EDITION
+    # Output folder.
     # --------------------------------------------------------
 
-    selected = select_edition()
-
-
-    edition_name = selected[
-        "name"
-    ]
-
-    eid = selected[
-        "eid"
-    ]
-
-    pid = selected[
-        "pid"
-    ]
-
-
-    # --------------------------------------------------------
-    # OUTPUT DIRECTORY
-    # --------------------------------------------------------
-
-    safe_name = (
-        edition_name.replace(
-            " ",
-            "_"
+    safe_date = (
+        date_str.replace(
+            "/",
+            "-"
         )
     )
 
-
     output_dir = os.path.join(
         OUTPUT_BASE_DIR,
-        safe_name
+        safe_date,
+        "SUNDAY_MAGAZINE"
     )
 
 
@@ -1543,18 +1321,17 @@ def main():
 
 
     # --------------------------------------------------------
-    # BUILD URL
+    # First page URL.
     # --------------------------------------------------------
 
     url = build_url(
         date_str,
-        eid,
-        pid
+        FIRST_PID
     )
 
 
     # --------------------------------------------------------
-    # DISPLAY INFORMATION
+    # Display.
     # --------------------------------------------------------
 
     print()
@@ -1564,7 +1341,7 @@ def main():
     )
 
     print(
-        "EENADU E-PAPER DOWNLOADER"
+        "EENADU SUNDAY MAGAZINE DOWNLOADER"
     )
 
     print(
@@ -1572,27 +1349,23 @@ def main():
     )
 
     print(
-        f"Edition : {edition_name}"
+        f"Date       : {date_str}"
     )
 
     print(
-        f"EID     : {eid}"
+        f"EID        : {EID}"
     )
 
     print(
-        f"PID     : {pid}"
+        f"First PID  : {FIRST_PID}"
     )
 
     print(
-        f"Date    : {date_str}"
+        f"Output     : {output_dir}"
     )
 
     print(
-        f"Output  : {output_dir}"
-    )
-
-    print(
-        f"URL     : {url}"
+        f"URL        : {url}"
     )
 
     print(
@@ -1601,7 +1374,7 @@ def main():
 
 
     # --------------------------------------------------------
-    # BUILD DRIVER
+    # Browser.
     # --------------------------------------------------------
 
     driver = build_driver()
@@ -1610,7 +1383,7 @@ def main():
     try:
 
         # ----------------------------------------------------
-        # OPEN E-PAPER
+        # Open first page.
         # ----------------------------------------------------
 
         print()
@@ -1625,7 +1398,7 @@ def main():
 
 
         # ----------------------------------------------------
-        # WAIT FOR VIEWER
+        # Wait.
         # ----------------------------------------------------
 
         print()
@@ -1633,7 +1406,7 @@ def main():
         print(
             f"[i] Waiting "
             f"{WAIT_AFTER_INITIAL_LOAD}s "
-            "for the viewer to load..."
+            "for the magazine viewer..."
         )
 
         time.sleep(
@@ -1642,7 +1415,7 @@ def main():
 
 
         # ----------------------------------------------------
-        # FIND PAGE ELEMENT
+        # Find page.
         # ----------------------------------------------------
 
         element, detected_id = find_page_element(
@@ -1650,36 +1423,17 @@ def main():
         )
 
 
-        if detected_id == "blocked":
-
-            input(
-                "\n>>> Press Enter to close the browser... "
-            )
-
-            return
-
-
         if not element:
 
             print()
 
             print(
-                "[!] Newspaper page element "
-                "was not found."
-            )
-
-            print()
-
-            print(
-                "[i] Current URL:"
+                "[ERROR] Magazine page was not found."
             )
 
             print(
-                driver.current_url
-            )
-
-            input(
-                "\n>>> Press Enter to close the browser... "
+                f"[i] Current URL: "
+                f"{driver.current_url}"
             )
 
             return
@@ -1688,13 +1442,13 @@ def main():
         print()
 
         print(
-            f"[i] Page detected via "
+            f"[i] Magazine page detected via "
             f"#{detected_id}."
         )
 
 
         # ----------------------------------------------------
-        # WAIT FOR FIRST PAGE
+        # Wait for first image.
         # ----------------------------------------------------
 
         if not wait_for_page_ready(
@@ -1703,7 +1457,7 @@ def main():
         ):
 
             print(
-                "[!] First newspaper page "
+                "[ERROR] First magazine page "
                 "did not become ready."
             )
 
@@ -1711,26 +1465,21 @@ def main():
 
 
         # ----------------------------------------------------
-        # NO MANUAL PAGE COUNT
+        # Start.
         # ----------------------------------------------------
 
         print()
 
         print(
-            "[i] Page count will be detected "
-            "automatically."
+            "[i] Page navigation is automatic."
         )
 
         print(
-            "[i] No manual page count is required."
+            "[i] Page count is automatic."
         )
 
         print()
 
-
-        # ----------------------------------------------------
-        # START CAPTURE
-        # ----------------------------------------------------
 
         input(
             ">>> Press Enter to begin capture "
@@ -1739,7 +1488,7 @@ def main():
 
 
         # ----------------------------------------------------
-        # CAPTURE LOOP
+        # Capture loop.
         # ----------------------------------------------------
 
         captured = 0
@@ -1768,7 +1517,7 @@ def main():
 
 
             # ------------------------------------------------
-            # Find current page element.
+            # Find actual magazine image.
             # ------------------------------------------------
 
             element, detected_id = find_page_element(
@@ -1776,31 +1525,18 @@ def main():
             )
 
 
-            if detected_id == "blocked":
-
-                print(
-                    "[!] Blocked page detected."
-                )
-
-                break
-
-
             if not element:
 
                 print(
-                    "[!] Newspaper page element "
-                    "not found."
-                )
-
-                print(
-                    "[!] Stopping capture."
+                    "[ERROR] Magazine page "
+                    "element disappeared."
                 )
 
                 break
 
 
             # ------------------------------------------------
-            # Wait for image.
+            # Wait until loaded.
             # ------------------------------------------------
 
             if not wait_for_page_ready(
@@ -1809,15 +1545,15 @@ def main():
             ):
 
                 print(
-                    "[!] Page image did not "
-                    "become ready."
+                    "[ERROR] Magazine page "
+                    "did not become ready."
                 )
 
                 break
 
 
             # ------------------------------------------------
-            # Get page signature.
+            # Signature.
             # ------------------------------------------------
 
             current_signature = (
@@ -1843,12 +1579,11 @@ def main():
             if current_signature in seen_pages:
 
                 print(
-                    "[!] This page was already "
-                    "captured."
+                    "[!] Duplicate page detected."
                 )
 
                 print(
-                    "[!] Viewer appears to have looped."
+                    "[!] Stopping navigation."
                 )
 
                 break
@@ -1860,7 +1595,7 @@ def main():
 
 
             # ------------------------------------------------
-            # Output filename.
+            # Screenshot path.
             # ------------------------------------------------
 
             output_path = os.path.join(
@@ -1870,7 +1605,7 @@ def main():
 
 
             # ------------------------------------------------
-            # CAPTURE
+            # Capture.
             # ------------------------------------------------
 
             try:
@@ -1883,14 +1618,12 @@ def main():
 
             except Exception as e:
 
-                print()
-
                 print(
-                    "[!] Screenshot failed."
+                    "[ERROR] Capture failed:"
                 )
 
                 print(
-                    f"    {e}"
+                    f"        {e}"
                 )
 
                 break
@@ -1928,7 +1661,7 @@ def main():
 
 
             # ------------------------------------------------
-            # TRY NEXT PAGE
+            # Next page.
             # ------------------------------------------------
 
             print()
@@ -1945,7 +1678,7 @@ def main():
 
 
             # ------------------------------------------------
-            # LAST PAGE
+            # Last page.
             # ------------------------------------------------
 
             if not method:
@@ -1960,7 +1693,7 @@ def main():
 
 
         # ----------------------------------------------------
-        # CAPTURE FINISHED
+        # Capture finished.
         # ----------------------------------------------------
 
         print()
@@ -1978,15 +1711,11 @@ def main():
         )
 
         print(
-            f"Edition : {edition_name}"
+            f"Pages captured : {captured}"
         )
 
         print(
-            f"Pages   : {captured}"
-        )
-
-        print(
-            f"Folder  : {output_dir}"
+            f"Output folder  : {output_dir}"
         )
 
         print(
@@ -1995,29 +1724,17 @@ def main():
 
 
         # ----------------------------------------------------
-        # AUTOMATIC PDF
+        # Create PDF.
         # ----------------------------------------------------
 
         if captured > 0:
 
-            print()
-
-            print(
-                "[i] Creating A4 PDF automatically..."
-            )
-
-
             pdf_path = create_a4_pdf(
                 output_dir,
-                edition_name,
                 date_str,
                 captured
             )
 
-
-            # ------------------------------------------------
-            # FINAL RESULT
-            # ------------------------------------------------
 
             if pdf_path:
 
@@ -2036,11 +1753,21 @@ def main():
                 )
 
                 print(
-                    f"PDF       : {pdf_path}"
+                    f"PDF:"
                 )
 
                 print(
-                    "Screenshots: Deleted automatically"
+                    pdf_path
+                )
+
+                print()
+
+                print(
+                    "PNG screenshots:"
+                )
+
+                print(
+                    "Deleted automatically"
                 )
 
                 print(
@@ -2060,12 +1787,12 @@ def main():
                 )
 
                 print(
-                    "Screenshots have been kept "
-                    "for safety."
+                    "=" * 70
                 )
 
                 print(
-                    "=" * 70
+                    "The PNG screenshots have been "
+                    "kept for safety."
                 )
 
         else:
@@ -2081,7 +1808,7 @@ def main():
             )
 
             print(
-                "[!] No screenshots were deleted."
+                "[!] Screenshots were not deleted."
             )
 
 
@@ -2090,7 +1817,6 @@ def main():
         input(
             "\n>>> Press Enter to close the browser... "
         )
-
 
         try:
 
