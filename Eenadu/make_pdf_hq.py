@@ -1,3 +1,11 @@
+# ============================================================
+# Newspaper E-Paper Automation
+# Open Source Project
+# Copyright (c) 2026
+#
+# Licensed under the MIT License.
+# See LICENSE file for details.
+# ============================================================
 """
 Eenadu High Quality PDF Builder
 
